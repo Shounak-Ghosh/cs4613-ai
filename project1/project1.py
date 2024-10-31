@@ -1,9 +1,11 @@
-import numpy as np
+import sys
 import heapq
-from math import sqrt, atan2, pi
+import numpy as np
 
+ROWS = 30
+COLS = 50
 class Node:
-    def __init__(self, position, g=0, h=0, parent=None, action=None):
+    def __init__(self, position, g, h, parent=None, action=None):
         self.position = position
         self.g = g
         self.h = h
@@ -15,101 +17,119 @@ class Node:
         return self.f < other.f
 
 def read_input(filename):
-    with open(filename, 'r') as file:
-        start_goal = list(map(int, file.readline().split()))
-        grid = np.array([list(map(int, file.readline().split())) for _ in range(30)])
-    return (start_goal[0], start_goal[1]), (start_goal[2], start_goal[3]), np.flipud(grid)
+    with open(filename, 'r') as f:
+        start_goal = list(map(int, f.readline().split()))
+        workspace = []
+        for _ in range(30):
+            row = list(map(int, f.readline().split()))
+            workspace.append(row[:50])  # Ensure each row has exactly 50 elements
+    return tuple(start_goal[:2]), tuple(start_goal[2:]), np.array(workspace)
 
-def write_output(filename, path, num_nodes, grid):
-    with open(filename, 'w') as file:
-        file.write(f"{len(path) - 1}\n")
-        file.write(f"{num_nodes}\n")
-        file.write(' '.join(str(node.action) for node in path[1:]) + '\n')
-        file.write(' '.join(f"{node.f:.2f}" for node in path) + '\n')
-        
-        for row in np.flipud(grid):
-            file.write(' '.join(map(str, row)) + '\n')
+def write_output(filename, depth, nodes_generated, path, f_values, workspace):
+    with open(filename, 'w') as f:
+        f.write(f"{depth}\n")
+        f.write(f"{nodes_generated}\n")
+        f.write(' '.join(map(str, path)) + '\n')
+        f.write(' '.join(f"{x:.1f}" for x in f_values) + '\n')
+        for row in workspace:
+            f.write(' '.join(map(str, row)) + '\n')
 
-def heuristic(a, b):
-    return sqrt((b[0] - a[0])**2 + (b[1] - a[1])**2)
+def heuristic(node, goal):
+    return np.sqrt((node[0] - goal[0])**2 + (node[1] - goal[1])**2)
 
-def get_neighbors(grid, node):
-    directions = [(0,1), (1,1), (1,0), (1,-1), (0,-1), (-1,-1), (-1,0), (-1,1)]
+def get_neighbors(position, workspace):
+    i, j = position
     neighbors = []
-    for i, (dx, dy) in enumerate(directions):
-        new_pos = (node.position[0] + dx, node.position[1] + dy)
-        if 0 <= new_pos[0] < grid.shape[0] and 0 <= new_pos[1] < grid.shape[1] and grid[new_pos] != 1:
-            neighbors.append((new_pos, i))
+    for di, dj, action in [(1,0,0), (1,1,1), (0,1,2), (-1,1,3), (-1,0,4), (-1,-1,5), (0,-1,6), (1,-1,7)]:
+        ni, nj = i + di, j + dj
+        if 0 <= (ROWS - nj - 1) < workspace.shape[0] and 0 <= ni < workspace.shape[1] and workspace[ROWS-nj-1][ni] != 1:
+            neighbors.append(((ni, nj), action))
     return neighbors
 
-def calculate_angle_cost(prev_action, new_action, k):
-    if prev_action is None:
+def theta(s):
+    return np.arctan2(s[1], s[0]) * 180 / np.pi
+
+def cost(s, a, s_prime, k):
+    if s == s_prime:
         return 0
-    angle_diff = abs(new_action - prev_action)
-    if angle_diff > 4:
-        angle_diff = 8 - angle_diff
-    return k * (angle_diff * 45) / 180
+    angle_cost = k * min(abs(theta(s_prime) - theta(s)), 360 - abs(theta(s_prime) - theta(s))) / 180
+    distance_cost = 1 if a in [0, 2, 4, 6] else np.sqrt(2)
+    return angle_cost + distance_cost
 
-def calculate_distance_cost(action):
-    return sqrt(2) if action % 2 == 1 else 1
-
-def a_star(grid, start, goal, k):
-    start_node = Node(start, h=heuristic(start, goal))
-    open_set = [start_node]
+def a_star_search(start, goal, workspace, k):
+    start_node = Node(start, 0, heuristic(start, goal))
+    open_list = [start_node]
     closed_set = set()
-    num_nodes = 1
-
-    while open_set:
-        current = heapq.heappop(open_set)
+    nodes_generated = 1
+    
+    while open_list:
+        current = heapq.heappop(open_list)
         
         if current.position == goal:
             path = []
-            while current:
-                path.append(current)
+            f_values = []
+            depth = 0
+            while current.parent:
+                path.append(current.action)
+                f_values.append(current.f)
                 current = current.parent
-            return path[::-1], num_nodes
+                depth += 1
+            f_values.append(current.f)
+            return depth, nodes_generated, path[::-1], f_values[::-1]
         
         closed_set.add(current.position)
         
-        for neighbor_pos, action in get_neighbors(grid, current):
-            if neighbor_pos in closed_set:
+        for neighbor, action in get_neighbors(current.position, workspace):
+            if neighbor in closed_set:
                 continue
             
-            angle_cost = calculate_angle_cost(current.action, action, k)
-            distance_cost = calculate_distance_cost(action)
-            g = current.g + angle_cost + distance_cost
-            h = heuristic(neighbor_pos, goal)
+            g = current.g + cost(current.position, action, neighbor, k)
+            h = heuristic(neighbor, goal)
+            neighbor_node = Node(neighbor, g, h, current, action)
             
-            neighbor = Node(neighbor_pos, g, h, current, action)
-            num_nodes += 1
-            
-            if neighbor not in open_set:
-                heapq.heappush(open_set, neighbor)
+            if neighbor_node not in open_list:
+                heapq.heappush(open_list, neighbor_node)
+                nodes_generated += 1
             else:
-                idx = open_set.index(neighbor)
-                if open_set[idx].g > g:
-                    open_set[idx] = neighbor
-                    heapq.heapify(open_set)
+                idx = open_list.index(neighbor_node)
+                if open_list[idx].g > g:
+                    open_list[idx] = neighbor_node
+                    heapq.heapify(open_list)
     
-    return None, num_nodes  # No path found
+    return None, nodes_generated, None, None
 
 def main():
-    input_file = input("Enter input file name: ")
-    output_file = input("Enter output file name: ")
-    k = float(input("Enter k value: "))
-    
-    start, goal, grid = read_input(input_file)
-    
-    path, num_nodes = a_star(grid, start, goal, k)
-    
+    if len(sys.argv) != 4:
+        print(f"Usage: python {sys.argv[0]} <input_file> <output_file> <k_value>")
+        sys.exit(1)
+
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+    k = float(sys.argv[3])
+
+    start, goal, workspace = read_input(input_file)
+    depth, nodes_generated, path, f_values = a_star_search(start, goal, workspace, k)
+
     if path:
-        for node in path[1:-1]:
-            grid[node.position] = 4  # Mark path
-        
-        write_output(output_file, path, num_nodes, grid)
-        print(f"Path found! Check {output_file} for results.")
+        current = start
+        for action in path:
+            ni, nj = current
+            if action in [0, 1, 7]:
+                ni += 1
+            elif action in [3, 4, 5]:
+                ni -= 1
+            if action in [1, 2, 3]:
+                nj += 1
+            elif action in [5, 6, 7]:
+                nj -= 1
+            if workspace[ROWS-nj-1][ni] == 0:
+                workspace[ROWS-nj-1][ni] = 4
+            current = (ni, nj)
+        print(f"Path found and output to {output_file}.")
     else:
         print("No path found.")
 
-if __name__ == '__main__':
+    write_output(output_file, depth, nodes_generated, path, f_values, workspace)
+
+if __name__ == "__main__":
     main()
