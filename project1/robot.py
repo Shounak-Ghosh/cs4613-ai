@@ -3,14 +3,21 @@ import heapq
 import numpy as np
 from collections import deque, defaultdict
 
-# Implement the A* algorithm to find the optimal robot path from the start to the goal
-# as described in the project description. The robot can move in 8 directions with varying cost.
-
 # Constants for the workspace dimensions
 ROWS = 30
 COLS = 50
+
 # Define possible moves with associated actions
-MOVE_SET = [(1,0,0), (1,1,1), (0,1,2), (-1,1,3), (-1,0,4), (-1,-1,5), (0,-1,6), (1,-1,7)]
+MOVE_SET = [
+    (1, 0, 0),   # Move down
+    (1, 1, 1),   # Move down-right
+    (0, 1, 2),   # Move right
+    (-1, 1, 3),  # Move up-right
+    (-1, 0, 4),  # Move up
+    (-1, -1, 5), # Move up-left
+    (0, -1, 6),  # Move left
+    (1, -1, 7)   # Move down-left
+]
 
 class Node:
     """
@@ -33,7 +40,11 @@ class Node:
     def __lt__(self, other):
         # Comparison for priority queue based on f value
         return self.f < other.f
+
 class PriorityQueue:
+    """
+    A priority queue implemented with a min-heap.
+    """
     def __init__(self):
         self.elements = []
         self.entry_finder = {}
@@ -41,6 +52,9 @@ class PriorityQueue:
         self.counter = 0
 
     def add_task(self, task, priority=0):
+        """
+        Adds a new task or updates the priority of an existing task.
+        """
         if task in self.entry_finder:
             self.remove_task(task)
         count = self.counter
@@ -50,10 +64,16 @@ class PriorityQueue:
         self.counter += 1
 
     def remove_task(self, task):
+        """
+        Marks an existing task as removed without deleting from the heap.
+        """
         entry = self.entry_finder.pop(task)
         entry[-1] = self.REMOVED
 
     def pop_task(self):
+        """
+        Removes and returns the task with the lowest priority from the queue.
+        """
         while self.elements:
             priority, count, task = heapq.heappop(self.elements)
             if task is not self.REMOVED:
@@ -63,11 +83,11 @@ class PriorityQueue:
 
 def read_input(filename):
     """
-    Reads the input file and returns start, goal positions and the workspace grid.
+    Reads the input file and returns start, goal positions, and the workspace grid.
     - filename: input file containing the grid and start/goal positions
     """
     with open(filename, 'r') as f:
-        # Read start and goal positions from first line
+        # Read start and goal positions from the first line
         start_goal = list(map(int, f.readline().split()))
         workspace = []
         for _ in range(30):
@@ -83,7 +103,7 @@ def write_output(filename, depth, nodes_generated, path, f_values, workspace):
     - nodes_generated: total nodes generated during search
     - path: list of actions from start to goal
     - f_values: list of f values along the path
-    - workspace: modified workspace grid showing path
+    - workspace: modified workspace grid showing the path
     """
     with open(filename, 'w') as f:
         f.write(f"{depth}\n")
@@ -92,7 +112,6 @@ def write_output(filename, depth, nodes_generated, path, f_values, workspace):
         f.write(' '.join(f"{x:.1f}" for x in f_values) + '\n')
         for row in workspace:
             f.write(' '.join(map(str, row)) + '\n')
-    
 
 def heuristic(node, goal):
     """
@@ -109,8 +128,8 @@ def get_neighbors(position, workspace):
     neighbors = []
     for di, dj, action in MOVE_SET:
         ni, nj = i + di, j + dj
-        # account for origin at bottom left of grid
-        if 0 <= (ROWS - nj - 1) < workspace.shape[0] and 0 <= ni < workspace.shape[1] and workspace[ROWS-nj-1][ni] != 1:
+        # Account for origin at the bottom left of the grid
+        if 0 <= (ROWS - nj - 1) < workspace.shape[0] and 0 <= ni < workspace.shape[1] and workspace[ROWS - nj - 1][ni] != 1:
             neighbors.append(((ni, nj), action))
     return neighbors
 
@@ -131,20 +150,28 @@ def cost(s, a, s_prime, k):
     if s == s_prime:
         return 0
     angle_cost = k * min(abs(theta(s_prime) - theta(s)), 360 - abs(theta(s_prime) - theta(s))) / 180
-    distance_cost = 1 if a in [0, 2, 4, 6] else np.sqrt(2)
+    distance_cost = 1 if a in [0, 2, 4, 6] else np.sqrt(2)  # Diagonal moves cost more
     return angle_cost + distance_cost
 
 def a_star_search(start, goal, workspace, k):
+    """
+    Implements the A* search algorithm to find the optimal path from start to goal.
+    - start: starting position
+    - goal: goal position
+    - workspace: grid representing obstacles and free spaces
+    - k: scaling factor for angular cost
+    """
     start_node = Node(start, 0, heuristic(start, goal))
     open_queue = PriorityQueue()
     open_queue.add_task(start_node, start_node.f)
-    closed_set = deque()
+    closed_set = deque()  # Stores visited nodes
     nodes_generated = 1
     nodes_closed = 0
-    
+
     while open_queue.elements:
         current = open_queue.pop_task()
         
+        # Goal check
         if current.position == goal:
             path = []
             f_values = []
@@ -156,11 +183,12 @@ def a_star_search(start, goal, workspace, k):
                 depth += 1
             f_values.append(current.f)
             return depth, nodes_generated, path[::-1], f_values[::-1]
-        
+
         closed_set.append(current.position)
         nodes_closed += 1
 
-        print("nodes opened: ", nodes_generated, "nodes closed: ", nodes_closed, "current position: ", current.position, "f value: ", current.f)
+        # print("nodes opened:", nodes_generated, "nodes closed:", nodes_closed,
+        #       "current position:", current.position, "f value:", current.f)
         
         for neighbor, action in get_neighbors(current.position, workspace):
             if neighbor in closed_set:
@@ -174,6 +202,7 @@ def a_star_search(start, goal, workspace, k):
                 open_queue.add_task(neighbor_node, neighbor_node.f)
                 nodes_generated += 1
             else:
+                # Update if a better path is found
                 existing_node = open_queue.entry_finder[neighbor_node].task
                 if existing_node.g > g:
                     existing_node.g = g
@@ -181,9 +210,8 @@ def a_star_search(start, goal, workspace, k):
                     existing_node.parent = current
                     existing_node.action = action
                     open_queue.add_task(existing_node, existing_node.f)
-    
-    return None, nodes_generated, None, None
 
+    return None, nodes_generated, None, None
 
 def main():
     """
@@ -213,14 +241,13 @@ def main():
                 nj += 1
             elif action in [5, 6, 7]:
                 nj -= 1
-            if workspace[ROWS-nj-1][ni] == 0:
-                workspace[ROWS-nj-1][ni] = 4
+            if workspace[ROWS - nj - 1][ni] == 0:
+                workspace[ROWS - nj - 1][ni] = 4
             current = (ni, nj)
         write_output(output_file, depth, nodes_generated, path, f_values, workspace)
         print(f"Path found and output to {output_file}.")
     else:
         print("No path found.")
 
-    
 if __name__ == "__main__":
     main()
