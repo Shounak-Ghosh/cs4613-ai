@@ -1,13 +1,15 @@
 import sys
 import heapq
 import numpy as np
+from collections import deque, defaultdict
 
 # Implement the A* algorithm to find the optimal robot path from the start to the goal
 # as described in the project description. The robot can move in 8 directions with varying cost.
 
-# Constants for the grid dimensions
+# Constants for the workspace dimensions
 ROWS = 30
 COLS = 50
+# Define possible moves with associated actions
 MOVE_SET = [(1,0,0), (1,1,1), (0,1,2), (-1,1,3), (-1,0,4), (-1,-1,5), (0,-1,6), (1,-1,7)]
 
 class Node:
@@ -31,6 +33,33 @@ class Node:
     def __lt__(self, other):
         # Comparison for priority queue based on f value
         return self.f < other.f
+class PriorityQueue:
+    def __init__(self):
+        self.elements = []
+        self.entry_finder = {}
+        self.REMOVED = '<removed-task>'
+        self.counter = 0
+
+    def add_task(self, task, priority=0):
+        if task in self.entry_finder:
+            self.remove_task(task)
+        count = self.counter
+        entry = [priority, count, task]
+        self.entry_finder[task] = entry
+        heapq.heappush(self.elements, entry)
+        self.counter += 1
+
+    def remove_task(self, task):
+        entry = self.entry_finder.pop(task)
+        entry[-1] = self.REMOVED
+
+    def pop_task(self):
+        while self.elements:
+            priority, count, task = heapq.heappop(self.elements)
+            if task is not self.REMOVED:
+                del self.entry_finder[task]
+                return task
+        raise KeyError('pop from an empty priority queue')
 
 def read_input(filename):
     """
@@ -63,6 +92,7 @@ def write_output(filename, depth, nodes_generated, path, f_values, workspace):
         f.write(' '.join(f"{x:.1f}" for x in f_values) + '\n')
         for row in workspace:
             f.write(' '.join(map(str, row)) + '\n')
+    
 
 def heuristic(node, goal):
     """
@@ -77,7 +107,6 @@ def get_neighbors(position, workspace):
     """
     i, j = position
     neighbors = []
-    # Define possible moves with associated actions
     for di, dj, action in MOVE_SET:
         ni, nj = i + di, j + dj
         # account for origin at bottom left of grid
@@ -106,40 +135,34 @@ def cost(s, a, s_prime, k):
     return angle_cost + distance_cost
 
 def a_star_search(start, goal, workspace, k):
-    """
-    A* search algorithm to find the optimal path from start to goal.
-    - k: angular cost weight
-    Returns depth, number of nodes generated, path actions, and f values along the path.
-    """
     start_node = Node(start, 0, heuristic(start, goal))
-    open_list = [start_node]  # Priority queue for open nodes
-    closed_set = set()  # Set for closed nodes
+    open_queue = PriorityQueue()
+    open_queue.add_task(start_node, start_node.f)
+    closed_set = deque()
     nodes_generated = 1
+    nodes_closed = 0
     
-    while open_list:
-        # Get the node with the lowest f value
-        current = heapq.heappop(open_list)
+    while open_queue.elements:
+        current = open_queue.pop_task()
         
-        # Check if the goal has been reached
         if current.position == goal:
             path = []
             f_values = []
             depth = 0
-            # Trace back the path
             while current.parent:
                 path.append(current.action)
                 f_values.append(current.f)
                 current = current.parent
                 depth += 1
             f_values.append(current.f)
-            # reverse the path and f_values to get the correct order
             return depth, nodes_generated, path[::-1], f_values[::-1]
         
-        closed_set.add(current.position)
+        closed_set.append(current.position)
+        nodes_closed += 1
+
+        print("nodes opened: ", nodes_generated, "nodes closed: ", nodes_closed, "current position: ", current.position, "f value: ", current.f)
         
-        # Explore neighbors
         for neighbor, action in get_neighbors(current.position, workspace):
-            # already visited
             if neighbor in closed_set:
                 continue
             
@@ -147,19 +170,20 @@ def a_star_search(start, goal, workspace, k):
             h = heuristic(neighbor, goal)
             neighbor_node = Node(neighbor, g, h, current, action)
             
-            if neighbor_node not in open_list:
-                heapq.heappush(open_list, neighbor_node)
+            if neighbor_node not in open_queue.entry_finder:
+                open_queue.add_task(neighbor_node, neighbor_node.f)
                 nodes_generated += 1
             else:
-                # neighboring node is already in open_list
-                idx = open_list.index(neighbor_node)
-                # Update open_list if current cost is lower
-                if open_list[idx].g > g:
-                    open_list[idx] = neighbor_node
-                    heapq.heapify(open_list)
+                existing_node = open_queue.entry_finder[neighbor_node].task
+                if existing_node.g > g:
+                    existing_node.g = g
+                    existing_node.f = g + h
+                    existing_node.parent = current
+                    existing_node.action = action
+                    open_queue.add_task(existing_node, existing_node.f)
     
-    # If no path is found, return None values
     return None, nodes_generated, None, None
+
 
 def main():
     """
