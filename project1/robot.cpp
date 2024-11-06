@@ -22,6 +22,7 @@ struct Node {
     Node* parent;             // Pointer to parent node for path reconstruction
     int action;               // Action taken to reach this node from its parent
 
+    // Node constructor
     Node(pair<int, int> pos, double g_cost, double h_cost, Node* par = nullptr, int act = -1)
         : position(pos), g(g_cost), h(h_cost), f(g + h), parent(par), action(act) {}
 
@@ -34,6 +35,11 @@ struct Node {
 // Function to read the input file and return start, goal positions, and the workspace grid
 tuple<pair<int, int>, pair<int, int>, vector<vector<int>>> read_input(const string& filename) {
     ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Error: File does not exist or could not be opened.\n";
+        exit(1);
+    }
+
     int start_x, start_y, goal_x, goal_y;
     file >> start_x >> start_y >> goal_x >> goal_y;
 
@@ -79,6 +85,7 @@ vector<pair<pair<int, int>, int>> get_neighbors(const pair<int, int>& position, 
     vector<pair<pair<int, int>, int>> neighbors;
 
     // Loop through possible moves and check for validity (bounds, obstacles)
+    // unpack move as structured binding (di, dj, action)
     for (const auto& [di, dj, action] : MOVE_SET) {
         int ni = i + di, nj = j + dj;
         if (0 <= nj && nj < ROWS && 0 <= ni && ni < COLS && workspace[ROWS - nj - 1][ni] != 1) {
@@ -130,6 +137,9 @@ tuple<int, int, vector<int>, vector<double>> a_star_search(const pair<int, int>&
                 f_values.push_back(node->f);
                 depth++;
             }
+
+            cout << path.size() << " " << f_values.size() << endl;
+
             reverse(path.begin(), path.end());
             reverse(f_values.begin(), f_values.end());
 
@@ -141,6 +151,7 @@ tuple<int, int, vector<int>, vector<double>> a_star_search(const pair<int, int>&
 
         // Expand neighbors of the current node
         for (const auto& [neighbor, action] : get_neighbors(current.position, workspace)) {
+            // Skip if neighbor is already visited
             if (closed_set.find(neighbor) != closed_set.end()) continue;
 
             double g = current.g + cost(current.position, action, neighbor, k);
