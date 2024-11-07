@@ -138,8 +138,6 @@ tuple<int, int, vector<int>, vector<double>> a_star_search(const pair<int, int>&
                 depth++;
             }
 
-            cout << path.size() << " " << f_values.size() << endl;
-
             reverse(path.begin(), path.end());
             reverse(f_values.begin(), f_values.end());
 
