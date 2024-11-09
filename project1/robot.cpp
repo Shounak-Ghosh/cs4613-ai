@@ -6,6 +6,7 @@
 #include <tuple>
 #include <set>
 #include <algorithm>
+#include <map>
 
 using namespace std;
 
@@ -15,6 +16,7 @@ const int COLS = 50;
 const vector<tuple<int, int, int>> MOVE_SET = {{1, 0, 0}, {1, 1, 1}, {0, 1, 2}, {-1, 1, 3},
                                                {-1, 0, 4}, {-1, -1, 5}, {0, -1, 6}, {1, -1, 7}};
 
+map<int,int> ANGLES = {{0,0},{1,45},{2,90},{3,135},{4,180},{5,225},{6,270},{7,315}};
 // Node structure to represent each position in the search tree
 struct Node {
     pair<int, int> position;  // Current position (row, col)
@@ -95,16 +97,15 @@ vector<pair<pair<int, int>, int>> get_neighbors(const pair<int, int>& position, 
     return neighbors;
 }
 
-// Helper function to calculate angle (in degrees) of a vector from the origin to a point s
-double theta(const pair<int, int>& s) {
-    return atan2(s.second, s.first) * 180.0 / M_PI;
-}
-
 // Function to compute movement cost between nodes based on action and angle difference
-double cost(const pair<int, int>& s, int a, const pair<int, int>& s_prime, double k) {
+double cost(const pair<int, int>& s, int prev_a ,int a, const pair<int, int>& s_prime, double k) {
     if (s == s_prime) return 0.0;  // No cost for staying in the same position
 
-    double angle_cost = k * min(abs(theta(s_prime) - theta(s)), 360 - abs(theta(s_prime) - theta(s))) / 180;
+    // Calculate angle cost based on the angle difference between the current and next direction
+    double delta_theta = abs(ANGLES[a] - ANGLES[prev_a]);
+    if (delta_theta > 180) delta_theta = 360 - delta_theta;
+    
+    double angle_cost = k * delta_theta / 180;
     double distance_cost = (a % 2 == 0) ? 1 : sqrt(2);  // Diagonal movements cost more
     return angle_cost + distance_cost;
 }
@@ -152,7 +153,7 @@ tuple<int, int, vector<int>, vector<double>> a_star_search(const pair<int, int>&
             // Skip if neighbor is already visited
             if (closed_set.find(neighbor) != closed_set.end()) continue;
 
-            double g = current.g + cost(current.position, action, neighbor, k);
+            double g = current.g + cost(current.position, current.action, action, neighbor, k);
             double h = heuristic(neighbor, goal);
             Node* neighbor_node = new Node(neighbor, g, h, new Node(current), action);
 
