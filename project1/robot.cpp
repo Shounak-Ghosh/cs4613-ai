@@ -104,6 +104,7 @@ double cost(const pair<int, int>& s, int prev_a ,int a, const pair<int, int>& s_
     // Calculate angle cost based on the angle difference between the current and next direction
     double delta_theta = abs(ANGLES[a] - ANGLES[prev_a]);
     if (delta_theta > 180) delta_theta = 360 - delta_theta;
+    cout << "a: " << a << " prev_a: " << prev_a << " delta_theta: " << delta_theta << endl;
     
     double angle_cost = k * delta_theta / 180;
     double distance_cost = (a % 2 == 0) ? 1 : sqrt(2);  // Diagonal movements cost more
