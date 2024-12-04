@@ -9,40 +9,42 @@ using namespace std;
 const int N = 9; // The size of the Sudoku grid (9x9)
 const int EMPTY = 0; // The constant representing an empty cell in the Sudoku grid
 
-// A struct to represent each cell in the Sudoku grid.
+// A struct to represent each cell in the Kropki Sudoku grid.
 struct Cell {
-    int value;         // The value of the cell (0 means empty)
-    vector<int> domain; // The possible values the cell can take
-    Cell() : value(EMPTY), domain{1,2,3,4,5,6,7,8,9} {} // Constructor initializes an empty cell with all possible values
+    int value;         
+    vector<int> domain;
+    // Constructor initializes an empty cell with all domain possible values
+    Cell() : value(EMPTY), domain{1,2,3,4,5,6,7,8,9} {} 
 };
 
 class KropkiSudoku {
 private:
-    Cell board[N][N]; // A 9x9 grid to represent the Sudoku puzzle
-    int horizontal_dots[N][N-1]; // An array to store the horizontal dots (constraints between adjacent cells)
-    int vertical_dots[N-1][N]; // An array to store the vertical dots (constraints between adjacent cells)
+    Cell board[N][N]; 
+    int horizontal_dots[N][N-1]; 
+    int vertical_dots[N-1][N];
 
     // Method to check if placing a number in a cell is valid
     bool is_valid(int row, int col, int num) {
         // Check the row and column for conflicts
         for (int i = 0; i < N; i++) {
-            if (board[row][i].value == num || board[i][col].value == num) return false; // If num already exists in the row or column, it's invalid
+            if (board[row][i].value == num || board[i][col].value == num) return false; 
         }
 
         // Check the 3x3 box for conflicts
         int box_row = row - row % 3, box_col = col - col % 3;
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 3; j++) {
-                if (board[box_row + i][box_col + j].value == num) return false; // If num exists in the 3x3 box, it's invalid
+                if (board[box_row + i][box_col + j].value == num) return false; 
             }
         }
 
         // Check the Kropki dot constraints (horizontal and vertical)
+        // 1 represents a white dot, 2 represents a black dot
         if (col > 0) { // Check left (horizontal dot)
             int left = board[row][col-1].value;
             if (left != EMPTY) {
-                if (horizontal_dots[row][col-1] == 1 && abs(num - left) != 1) return false; // "1" dot means the values should differ by 1
-                if (horizontal_dots[row][col-1] == 2 && num != 2*left && left != 2*num) return false; // "2" dot means the values should be a multiple of each other
+                if (horizontal_dots[row][col-1] == 1 && abs(num - left) != 1) return false; 
+                if (horizontal_dots[row][col-1] == 2 && num != 2*left && left != 2*num) return false;
             }
         }
         if (col < N-1) { // Check right (horizontal dot)
@@ -67,20 +69,21 @@ private:
             }
         }
 
-        return true; // If no conflicts, the number is valid
+        return true;
     }
 
     // Select an unassigned variable (cell) to make the next move
     pair<int, int> select_unassigned_variable() {
+        // initialize to -1
         int min_remaining = 10, max_degree = -1;
         pair<int, int> selected = {-1, -1};
 
         // Iterate over all cells in the grid
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) {
-                if (board[i][j].value == EMPTY) { // If the cell is unassigned
+                if (board[i][j].value == EMPTY) { 
                     int remaining = board[i][j].domain.size(); // Number of possible values for the cell
-                    int degree = count_constraints(i, j); // Count constraints for the cell
+                    int degree = count_constraints(i, j); 
 
                     // Select the cell with the fewest remaining values, and if tied, the one with the most constraints
                     if (remaining < min_remaining || (remaining == min_remaining && degree > max_degree)) {
@@ -92,7 +95,7 @@ private:
             }
         }
 
-        return selected; // Return the selected unassigned cell
+        return selected;
     }
 
     // Count the number of constraints (empty cells that are in the same row, column, or 3x3 box)
@@ -111,7 +114,7 @@ private:
                 if (box_row + i != row && box_col + j != col && board[box_row + i][box_col + j].value == EMPTY) count++;
             }
         }
-        return count; // Return the number of constraints
+        return count; 
     }
 
     // Perform forward checking: if placing a number in a cell causes a domain to become empty in any neighboring cell, return false
@@ -120,6 +123,7 @@ private:
         for (int i = 0; i < N; i++) {
             if (i != col && board[row][i].value == EMPTY) {
                 auto& domain = board[row][i].domain;
+                // Remove the number from the domain of the affected cell
                 domain.erase(remove(domain.begin(), domain.end(), num), domain.end());
                 if (domain.empty()) return false; // If the domain becomes empty, return false
             }
@@ -142,7 +146,7 @@ private:
             }
         }
 
-        return true; // If no domain becomes empty, return true
+        return true; // No empty domains
     }
 
     // Restore the domains of affected cells after a backtrack
@@ -198,8 +202,9 @@ public:
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) {
                 file >> board[i][j].value;
+                // The cell has a value
                 if (board[i][j].value != EMPTY) {
-                    board[i][j].domain.clear(); // If the cell has a value, remove it from the domain
+                    board[i][j].domain.clear(); // Reset the domain to the value
                     board[i][j].domain.push_back(board[i][j].value);
                 }
             }
