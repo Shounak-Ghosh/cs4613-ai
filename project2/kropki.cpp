@@ -100,22 +100,33 @@ private:
 
     // Count the number of constraints (empty cells that are in the same row, column, or 3x3 box)
     int count_constraints(int row, int col) {
-        int count = 0;
-        // Check row and column
-        for (int i = 0; i < N; i++) {
-            if (i != col && board[row][i].value == EMPTY) count++;
-            if (i != row && board[i][col].value == EMPTY) count++;
-        }
-
-        // Check the 3x3 box
-        int box_row = row - row % 3, box_col = col - col % 3;
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
-                if (box_row + i != row && box_col + j != col && board[box_row + i][box_col + j].value == EMPTY) count++;
-            }
-        }
-        return count; 
+    int count = 0;
+    // Row and column constraints
+    for (int i = 0; i < N; i++) {
+        if (i != col && board[row][i].value == EMPTY) count++;
+        if (i != row && board[i][col].value == EMPTY) count++;
     }
+    
+    // 3x3 box constraints
+    int box_row = row - row % 3, box_col = col - col % 3;
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            if (box_row + i != row && box_col + j != col && board[box_row + i][box_col + j].value == EMPTY) count++;
+        }
+    }
+
+    // Kropki constraints
+    const int directions[4][2] = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}}; // Left, Right, Up, Down
+    for (const auto& [dr, dc] : directions) {
+        int r = row + dr, c = col + dc;
+        if (r >= 0 && r < N && c >= 0 && c < N) {
+            int dot = (dr == 0) ? horizontal_dots[row][min(col, c)] : vertical_dots[min(row, r)][col];
+            if (dot != 0 && board[r][c].value == EMPTY) count++;
+        }
+    }
+    return count;
+}
+
 
     // Perform forward checking: if placing a number in a cell causes a domain to become empty in any neighboring cell, return false
     bool forward_checking(int row, int col, int num) {
